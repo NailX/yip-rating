@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>壹评级估值库 · 在线查询</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#0d1117; color:#c9d1d9; font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; font-size:14px; }
+  header { padding:16px 20px; border-bottom:1px solid #21262d; position:sticky; top:0; background:#0d1117; z-index:10; }
+  h1 { font-size:18px; color:#58a6ff; }
+  .sub { color:#8b949e; font-size:12px; margin-top:4px; }
+  .controls { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+  input, select { background:#161b22; border:1px solid #30363d; color:#c9d1d9; border-radius:6px; padding:6px 10px; font-size:13px; }
+  input { flex:1; min-width:160px; }
+  table { width:100%; border-collapse:collapse; }
+  th { position:sticky; top:118px; background:#161b22; padding:8px 6px; text-align:right; font-size:12px; color:#8b949e; cursor:pointer; user-select:none; white-space:nowrap; border-bottom:1px solid #30363d; }
+  th:first-child, td:first-child { text-align:left; padding-left:16px; }
+  th:nth-child(2), td:nth-child(2) { text-align:left; }
+  td { padding:7px 6px; text-align:right; border-bottom:1px solid #21262d; white-space:nowrap; }
+  tr:hover td { background:#161b22; cursor:pointer; }
+  .name { color:#58a6ff; font-weight:600; }
+  .up { color:#3fb950; font-weight:700; }
+  .down { color:#f85149; font-weight:700; }
+  .flat { color:#d29922; }
+  .star { color:#d29922; }
+  .badge { display:inline-block; padding:1px 6px; border-radius:4px; font-size:11px; }
+  .b-low { background:#0d2818; color:#3fb950; }
+  .b-mid { background:#2d2206; color:#d29922; }
+  .b-high { background:#3d1418; color:#f85149; }
+  #overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:100; }
+  #panel { position:fixed; top:0; right:0; width:min(560px,100%); height:100%; background:#0d1117; border-left:1px solid #30363d; overflow-y:auto; padding:20px; z-index:101; display:none; }
+  #panel h2 { color:#58a6ff; font-size:17px; margin-bottom:4px; }
+  #panel .close { position:absolute; top:14px; right:16px; cursor:pointer; color:#8b949e; font-size:20px; }
+  .sec { margin-top:16px; }
+  .sec h3 { font-size:13px; color:#d29922; margin-bottom:6px; border-bottom:1px solid #21262d; padding-bottom:4px; }
+  .sec p, .sec li { font-size:12.5px; line-height:1.7; color:#adbac7; }
+  .sec ul { padding-left:18px; }
+  .mini { width:100%; font-size:11.5px; }
+  .mini th { position:static; font-size:11px; padding:4px; }
+  .mini td { font-size:11.5px; padding:4px; }
+  .cert-stars { font-size:16px; color:#d29922; }
+  @media (max-width:760px) {
+    th, td { font-size:11.5px; padding:5px 3px; }
+    .hide-m { display:none; }
+    th { top:132px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>📊 壹评级估值库</h1>
+  <div class="sub" id="meta"></div>
+  <div class="controls">
+    <input id="q" placeholder="搜索 名称 / 代码 / 行业…" oninput="render()">
+    <select id="fStatus" onchange="render()">
+      <option value="">估值状态(全部)</option><option>严重低估</option><option>低估</option><option>偏低估</option><option>合理估值</option><option>偏高估</option><option>高估</option><option>严重高估</option>
+    </select>
+    <select id="fCert" onchange="render()">
+      <option value="0">确定性(全部)</option><option value="4.5">≥4.5⭐</option><option value="4">≥4⭐</option><option value="3.5">≥3.5⭐</option><option value="3">≥3⭐</option>
+    </select>
+    <select id="fInd" onchange="render()"><option value="">行业(全部)</option></select>
+  </div>
+</header>
+<table>
+<thead><tr>
+  <th onclick="sortBy('n')">名称</th><th onclick="sortBy('ind')" class="hide-m">行业</th>
+  <th onclick="sortBy('d')">日期</th><th onclick="sortBy('ddm')">DDM(亿)</th>
+  <th onclick="sortBy('mc')" class="hide-m">市值(亿)</th><th onclick="sortBy('up')">低估%</th>
+  <th onclick="sortBy('m')" class="hide-m">护城河</th><th onclick="sortBy('cert')">确定性</th>
+</tr></thead>
+<tbody id="tb"></tbody>
+</table>
+<div id="overlay" onclick="closePanel()"></div>
+<div id="panel"><span class="close" onclick="closePanel()">✕</span><div id="panelBody"></div></div>
+<script src="yip_data.js"></script>
+<script>
+let sortKey='up', sortDir=-1;
+const certOf = c => { const d=DATA.details[c]; return d&&d.certainty&&d.certainty.stars?d.certainty.stars:0; };
+const fmtS = s => { if(!s) return '<span style="color:#484f58">—</span>'; const f=Math.floor(s), h=(s-f)>=0.5; return '<span class="star">'+'★'.repeat(f)+(h?'½':'')+'</span>'; };
+const badge = s => { if(!s) return ''; if(s.includes('低估')) return `<span class="badge b-low">${s}</span>`; if(s.includes('合理')) return `<span class="badge b-mid">合理</span>`; return `<span class="badge b-high">${s}</span>`; };
+const upCls = v => v==null?'':(v>=25?'up':(v<0?'down':'flat'));
+
+// 行业下拉
+[...new Set(DATA.stocks.map(s=>s.ind).filter(Boolean))].sort().forEach(i=>{
+  const o=document.createElement('option'); o.textContent=i; document.getElementById('fInd').appendChild(o);
+});
+document.getElementById('meta').textContent = `共 ${DATA.count} 只 · 数据更新 ${DATA.updated} · 来源：第一财经壹评级`;
+
+function filtered(){
+  const q=document.getElementById('q').value.trim().toLowerCase();
+  const fs=document.getElementById('fStatus').value;
+  const fc=parseFloat(document.getElementById('fCert').value);
+  const fi=document.getElementById('fInd').value;
+  return DATA.stocks.filter(s=>{
+    if(q && !(s.n.toLowerCase().includes(q)||s.c.toLowerCase().includes(q)||s.ind.toLowerCase().includes(q))) return false;
+    if(fs && s.ddm_s!==fs) return false;
+    if(fc && certOf(s.c)<fc) return false;
+    if(fi && s.ind!==fi) return false;
+    return true;
+  });
+}
+function sortBy(k){ if(sortKey===k) sortDir*=-1; else {sortKey=k; sortDir=k==='n'||k==='d'?1:-1;} render(); }
+function render(){
+  let arr=filtered();
+  arr.sort((a,b)=>{
+    let va = sortKey==='cert'?certOf(a.c):a[sortKey], vb = sortKey==='cert'?certOf(b.c):b[sortKey];
+    if(va==null) return 1; if(vb==null) return -1;
+    return (va>vb?1:va<vb?-1:0)*sortDir;
+  });
+  document.getElementById('tb').innerHTML = arr.slice(0,600).map(s=>`<tr onclick="openPanel('${s.c}')">
+    <td><span class="name">${s.n}</span><span style="color:#484f58;font-size:11px"> ${s.t}</span></td>
+    <td class="hide-m" style="color:#8b949e">${s.ind}</td>
+    <td style="color:#8b949e;font-size:11.5px">${s.d?s.d.slice(2):''}</td>
+    <td>${s.ddm?s.ddm.toLocaleString():'—'}</td>
+    <td class="hide-m" style="color:#8b949e">${s.mc?s.mc.toLocaleString():'—'}</td>
+    <td class="${upCls(s.up)}">${s.up!=null?(s.up>0?'+':'')+s.up.toFixed(0)+'%':'—'}</td>
+    <td class="hide-m">${fmtS(s.m)}</td>
+    <td>${fmtS(certOf(s.c))}</td></tr>`).join('');
+}
+function mini(rows, cols, names){
+  if(!rows||!rows.length) return '<p style="color:#484f58">（该报告无此板块）</p>';
+  return `<table class="mini"><thead><tr>${names.map(n=>`<th>${n}</th>`).join('')}</tr></thead><tbody>${
+    rows.map(r=>`<tr>${cols.map(c=>{let v=r[c]; if(v==null)v='—'; else if(typeof v==='number')v=v.toLocaleString(); return `<td>${v}</td>`;}).join('')}</tr>`).join('')}</tbody></table>`;
+}
+function openPanel(code){
+  const s=DATA.stocks.find(x=>x.c===code); const d=DATA.details[code]||{};
+  const cert=d.certainty;
+  document.getElementById('panelBody').innerHTML = `
+    <h2>${s.n} <span style="font-size:13px;color:#8b949e">${code}</span></h2>
+    <div class="sub">${s.ind} · ${s.t==='变'?'评级变动':'首次评级'} ${s.d} · DDM ${s.ddm}亿 ${badge(s.ddm_s)} · 最新市值 ${s.mc?s.mc.toLocaleString():'—'}亿</div>
+    <div class="sec"><h3>四维评分</h3><p>成长 ${s.g??'—'}⭐ · 盈利 ${s.p??'—'}⭐ · 格局 ${s.i??'—'}⭐ · 护城河 ${s.m??'—'}⭐</p></div>
+    <div class="sec"><h3>估值确定性</h3>${cert?`<p class="cert-stars">${'★'.repeat(Math.floor(cert.stars))}${cert.stars%1?'½':''}<span style="font-size:12px;color:#8b949e">（${cert.stars}星）</span></p><p>${cert.note||''}</p>`:'<p style="color:#484f58">（该报告无此板块）</p>'}</div>
+    <div class="sec"><h3>核心结论</h3><p>${s.concl||'—'}</p></div>
+    <div class="sec"><h3>DDM分业务（亿）</h3>${mini(d.ddm,['biz','forecast','perpetual','business_value','total'],['业务','预测期','永续期','业务价值','总价值'])}</div>
+    <div class="sec"><h3>动态估值参数</h3>${mini(d.dynamic_params,['biz','cagr','industry_pattern','moat_sustain','discount','multiple','effective_profit'],['业务','CAGR%','格局','护城河','贴现%','倍数','有效盈利'])}</div>
+    <div class="sec"><h3>动态估值价值（亿）</h3>${mini(d.dynamic,['biz','explicit','post_explicit','total'],['业务','显性期','显性期后','总价值'])}</div>
+    <div class="sec"><h3>前提假设</h3>${d.assumptions&&d.assumptions.length?'<ul>'+d.assumptions.map(a=>`<li>${a}</li>`).join('')+'</ul>':'<p style="color:#484f58">（未提取）</p>'}</div>`;
+  document.getElementById('panel').style.display='block';
+  document.getElementById('overlay').style.display='block';
+}
+function closePanel(){ document.getElementById('panel').style.display='none'; document.getElementById('overlay').style.display='none'; }
+render();
+</script>
+</body>
+</html>
