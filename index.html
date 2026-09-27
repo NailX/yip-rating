@@ -126,12 +126,20 @@ function mini(rows, cols, names){
 function openPanel(code){
   const s=DATA.stocks.find(x=>x.c===code); const d=DATA.details[code]||{};
   const cert=d.certainty;
+  const ac=d.assumption_compare;
+  const acHtml = ac ? `
+    <div class="sec"><h3>📈 假设演变（首次 vs 变动）</h3>
+    ${ac.compare_note?`<p style="background:#161b22;border-left:3px solid #d29922;padding:8px 10px;border-radius:4px">${ac.compare_note}</p>`:''}
+    ${ac.first_assumptions?`<details style="margin-top:8px"><summary style="cursor:pointer;color:#58a6ff;font-size:12px">首次报告假设（展开）</summary><p style="white-space:pre-line;margin-top:6px">${ac.first_assumptions}</p></details>`:''}
+    ${ac.change_assumptions?`<details style="margin-top:6px"><summary style="cursor:pointer;color:#58a6ff;font-size:12px">变动报告假设调整（展开）</summary><p style="white-space:pre-line;margin-top:6px">${ac.change_assumptions}</p></details>`:''}
+    </div>` : '';
   document.getElementById('panelBody').innerHTML = `
     <h2>${s.n} <span style="font-size:13px;color:#8b949e">${code}</span></h2>
     <div class="sub">${s.ind} · ${s.t==='变'?'评级变动':'首次评级'} ${s.d} · DDM ${s.ddm}亿 ${badge(s.ddm_s)} · 最新市值 ${s.mc?s.mc.toLocaleString():'—'}亿</div>
     <div class="sec"><h3>四维评分</h3><p>成长 ${s.g??'—'}⭐ · 盈利 ${s.p??'—'}⭐ · 格局 ${s.i??'—'}⭐ · 护城河 ${s.m??'—'}⭐</p></div>
     <div class="sec"><h3>估值确定性</h3>${cert?`<p class="cert-stars">${'★'.repeat(Math.floor(cert.stars))}${cert.stars%1?'½':''}<span style="font-size:12px;color:#8b949e">（${cert.stars}星）</span></p><p>${cert.note||''}</p>`:'<p style="color:#484f58">（该报告无此板块）</p>'}</div>
     <div class="sec"><h3>核心结论</h3><p>${s.concl||'—'}</p></div>
+    ${acHtml}
     <div class="sec"><h3>DDM分业务（亿）</h3>${mini(d.ddm,['biz','forecast','perpetual','business_value','total'],['业务','预测期','永续期','业务价值','总价值'])}</div>
     <div class="sec"><h3>动态估值参数</h3>${mini(d.dynamic_params,['biz','cagr','industry_pattern','moat_sustain','discount','multiple','effective_profit'],['业务','CAGR%','格局','护城河','贴现%','倍数','有效盈利'])}</div>
     <div class="sec"><h3>动态估值价值（亿）</h3>${mini(d.dynamic,['biz','explicit','post_explicit','total'],['业务','显性期','显性期后','总价值'])}</div>
