@@ -144,7 +144,7 @@ function openPanel(code){
     <div class="sec"><h3>动态估值参数</h3>${mini(d.dynamic_params,['biz','cagr','industry_pattern','moat_sustain','discount','multiple','effective_profit'],['业务','CAGR%','格局','护城河','贴现%','倍数','有效盈利'])}</div>
     <div class="sec"><h3>动态估值价值（亿）</h3>${mini(d.dynamic,['biz','explicit','post_explicit','total'],['业务','显性期','显性期后','总价值'])}</div>
     ${(()=>{if(!d.forecast||!d.forecast.length)return '';const years=[];d.forecast.forEach(r=>{if(r.years)Object.keys(r.years).forEach(y=>{if(!years.includes(y))years.push(y)})});if(!years.length)return '';const rows=d.forecast.filter(r=>r.years).map(r=>`<tr><td>${r.biz||''}</td>${years.map(y=>`<td>${r.years[y]??'-'}</td>`).join('')}</tr>`).join('');return `<div class="sec"><h3>业绩预测</h3><table><thead><tr><th>指标</th>${years.map(y=>`<th>${y}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`})()}
-    <div class="sec"><h3>前提假设</h3>${d.assumptions&&d.assumptions.length?'<ul>'+d.assumptions.map(a=>`<li>${a}</li>`).join('')+'</ul>':'<p style="color:#484f58">（未提取）</p>'}</div>`;
+    <div class="sec"><h3>前提假设</h3>${(()=>{const A=d.assumptions;if(!A)return '<p style="color:#484f58">（未提取）</p>';const arr=Array.isArray(A)?A:(typeof A==='string'?A.split(/\n+/).filter(x=>x.trim()):Object.values(A));if(!arr.length)return '<p style="color:#484f58">（未提取）</p>';return '<ul>'+arr.map(a=>`<li>${typeof a==='string'?a:JSON.stringify(a)}</li>`).join('')+'</ul>';})()}</div>`;
   document.getElementById('panel').style.display='block';
   document.getElementById('overlay').style.display='block';
 }
