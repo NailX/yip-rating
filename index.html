@@ -60,6 +60,9 @@
       <option value="0">确定性(全部)</option><option value="4.5">≥4.5⭐</option><option value="4">≥4⭐</option><option value="3.5">≥3.5⭐</option><option value="3">≥3⭐</option>
     </select>
     <select id="fInd" onchange="render()"><option value="">行业(全部)</option></select>
+    <select id="fFish" onchange="render()">
+      <option value="">费雪(全部)</option><option value="1">已考核</option><option value="10">≥10✓</option><option value="12">≥12✓</option><option value="-1">有✗地雷</option>
+    </select>
   </div>
 </header>
 <table>
@@ -68,6 +71,7 @@
   <th onclick="sortBy('d')">日期</th><th onclick="sortBy('ddm')">DDM(亿)</th>
   <th onclick="sortBy('mc')" class="hide-m">市值(亿)</th><th onclick="sortBy('up')">低估%</th>
   <th onclick="sortBy('m')" class="hide-m">护城河</th><th onclick="sortBy('cert')">确定性</th>
+  <th onclick="sortBy('fish')">费雪</th>
 </tr></thead>
 <tbody id="tb"></tbody>
 </table>
@@ -77,6 +81,9 @@
 <script>
 let sortKey='up', sortDir=-1;
 const certOf = c => { const d=DATA.details[c]; return d&&d.certainty&&d.certainty.stars?d.certainty.stars:0; };
+const fisherOf = c => (DATA.fisher && DATA.fisher[c]) || null;
+const fishCell = c => { const f=fisherOf(c); if(!f) return '<span style="color:#484f58">—</span>';
+  return `<span style="color:#3fb950;font-weight:700">${f.ok}✓</span> <span style="color:#d29922">${f.mid}△</span> `+(f.no?`<span style="color:#f85149;font-weight:700">${f.no}✗</span>`:'<span style="color:#3fb950;font-weight:700">0✗</span>'); };
 const fmtS = s => { if(!s) return '<span style="color:#484f58">—</span>'; const f=Math.floor(s), h=(s-f)>=0.5; return '<span class="star">'+'★'.repeat(f)+(h?'½':'')+'</span>'; };
 const badge = s => { if(!s) return ''; if(s.includes('低估')) return `<span class="badge b-low">${s}</span>`; if(s.includes('合理')) return `<span class="badge b-mid">合理</span>`; return `<span class="badge b-high">${s}</span>`; };
 const upCls = v => v==null?'':(v>=25?'up':(v<0?'down':'flat'));
@@ -85,18 +92,23 @@ const upCls = v => v==null?'':(v>=25?'up':(v<0?'down':'flat'));
 [...new Set(DATA.stocks.map(s=>s.ind).filter(Boolean))].sort().forEach(i=>{
   const o=document.createElement('option'); o.textContent=i; document.getElementById('fInd').appendChild(o);
 });
-document.getElementById('meta').textContent = `共 ${DATA.count} 只 · 数据更新 ${DATA.updated} · 来源：第一财经壹评级`;
+document.getElementById('meta').textContent = `共 ${DATA.count} 只 · 数据更新 ${DATA.updated} · 费雪考核 ${DATA.fisher?Object.keys(DATA.fisher).length:0} 张 · 来源：第一财经壹评级 + 费雪十五要点`;
 
 function filtered(){
   const q=document.getElementById('q').value.trim().toLowerCase();
   const fs=document.getElementById('fStatus').value;
   const fc=parseFloat(document.getElementById('fCert').value);
   const fi=document.getElementById('fInd').value;
+  const ff=document.getElementById('fFish').value;
   return DATA.stocks.filter(s=>{
     if(q && !(s.n.toLowerCase().includes(q)||s.c.toLowerCase().includes(q)||s.ind.toLowerCase().includes(q))) return false;
     if(fs && s.ddm_s!==fs) return false;
     if(fc && certOf(s.c)<fc) return false;
     if(fi && s.ind!==fi) return false;
+    if(ff==='1' && !fisherOf(s.c)) return false;
+    if(ff==='10' && (fisherOf(s.c)||{ok:0}).ok<10) return false;
+    if(ff==='12' && (fisherOf(s.c)||{ok:0}).ok<12) return false;
+    if(ff==='-1' && !(fisherOf(s.c)||{no:0}).no) return false;
     return true;
   });
 }
@@ -104,7 +116,8 @@ function sortBy(k){ if(sortKey===k) sortDir*=-1; else {sortKey=k; sortDir=k==='n
 function render(){
   let arr=filtered();
   arr.sort((a,b)=>{
-    let va = sortKey==='cert'?certOf(a.c):a[sortKey], vb = sortKey==='cert'?certOf(b.c):b[sortKey];
+    let va = sortKey==='cert'?certOf(a.c):(sortKey==='fish'?(fisherOf(a.c)?fisherOf(a.c).ok:null):a[sortKey]);
+    let vb = sortKey==='cert'?certOf(b.c):(sortKey==='fish'?(fisherOf(b.c)?fisherOf(b.c).ok:null):b[sortKey]);
     if(va==null) return 1; if(vb==null) return -1;
     return (va>vb?1:va<vb?-1:0)*sortDir;
   });
@@ -116,7 +129,8 @@ function render(){
     <td class="hide-m" style="color:#8b949e">${s.mc?s.mc.toLocaleString():'—'}</td>
     <td class="${upCls(s.up)}">${s.up!=null?(s.up>0?'+':'')+s.up.toFixed(0)+'%':'—'}</td>
     <td class="hide-m">${fmtS(s.m)}</td>
-    <td>${fmtS(certOf(s.c))}</td></tr>`).join('');
+    <td>${fmtS(certOf(s.c))}</td>
+    <td>${fishCell(s.c)}</td></tr>`).join('');
 }
 function mini(rows, cols, names){
   if(!rows||!rows.length) return '<p style="color:#484f58">（该报告无此板块）</p>';
@@ -126,6 +140,20 @@ function mini(rows, cols, names){
 function openPanel(code){
   const s=DATA.stocks.find(x=>x.c===code); const d=DATA.details[code]||{};
   const cert=d.certainty;
+  const f=fisherOf(code);
+  const fvCls = v => v[0]==='✓'?'#3fb950':(v[0]==='✗'?'#f85149':'#d29922');
+  const fishHtml = f ? `
+    <div class="sec"><h3>🎯 费雪十五要点考核（${f.date}）</h3>
+    <p><b style="color:#3fb950">${f.ok}✓</b> / <b style="color:#d29922">${f.mid}△</b> / <b style="color:#f85149">${f.no}✗</b>${f.pos?` · 仓位定位：<b style="color:#58a6ff">${f.pos}</b>`:''}</p>
+    <table class="mini"><thead><tr><th>#</th><th>要点</th><th>判定</th></tr></thead><tbody>
+    ${f.rows.map(r=>`<tr><td>${r.n}</td><td style="text-align:left;white-space:normal">${r.point}</td><td style="color:${fvCls(r.v)};font-weight:700">${r.v}</td></tr>`).join('')}
+    </tbody></table>
+    <details style="margin-top:8px"><summary style="cursor:pointer;color:#58a6ff;font-size:12px">证据明细与估值碰撞（展开）</summary>
+    <ul style="margin-top:6px">${f.rows.map(r=>`<li><b>${r.n}.${r.point}</b> <span style="color:${fvCls(r.v)}">${r.v}</span> ${r.ev}</li>`).join('')}</ul>
+    ${f.coll&&f.coll.length?`<table class="mini" style="margin-top:6px"><tbody>${f.coll.map(r=>`<tr><td style="text-align:left;white-space:normal;min-width:70px"><b>${r[0]}</b></td><td style="text-align:left;white-space:normal">${r[1]}</td><td style="text-align:left;white-space:normal;color:#8b949e">${r[2]}</td></tr>`).join('')}</tbody></table>`:''}
+    </details>
+    ${f.concl?`<p style="margin-top:8px;background:#161b22;border-left:3px solid #58a6ff;padding:8px 10px;border-radius:4px">${f.concl}</p>`:''}
+    </div>` : '';
   const ac=d.assumption_compare;
   const acHtml = ac ? `
     <div class="sec"><h3>📈 假设演变（首次 vs 变动）</h3>
@@ -138,6 +166,7 @@ function openPanel(code){
     <div class="sub">${s.ind} · ${s.t==='变'?'评级变动':'首次评级'} ${s.d} · DDM ${s.ddm}亿 ${badge(s.ddm_s)} · 最新市值 ${s.mc?s.mc.toLocaleString():'—'}亿</div>
     <div class="sec"><h3>四维评分</h3><p>成长 ${s.g??'—'}⭐ · 盈利 ${s.p??'—'}⭐ · 格局 ${s.i??'—'}⭐ · 护城河 ${s.m??'—'}⭐</p></div>
     <div class="sec"><h3>估值确定性</h3>${cert?`<p class="cert-stars">${'★'.repeat(Math.floor(cert.stars))}${cert.stars%1?'½':''}<span style="font-size:12px;color:#8b949e">（${cert.stars}星）</span></p><p>${cert.note||''}</p>`:'<p style="color:#484f58">（该报告无此板块）</p>'}</div>
+    ${fishHtml}
     <div class="sec"><h3>核心结论</h3><p>${s.concl||'—'}</p></div>
     ${acHtml}
     <div class="sec"><h3>DDM分业务（亿）</h3>${mini(d.ddm,['biz','forecast','perpetual','business_value','total'],['业务','预测期','永续期','业务价值','总价值'])}</div>
