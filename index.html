@@ -78,10 +78,17 @@
 <div id="overlay" onclick="closePanel()"></div>
 <div id="panel"><span class="close" onclick="closePanel()">✕</span><div id="panelBody"></div></div>
 <script src="yip_data.js"></script>
+<script src="fisher_data.js"></script>
 <script>
+if(typeof DATA==='undefined'){
+  window.addEventListener('DOMContentLoaded',()=>{
+    document.body.insertAdjacentHTML('afterbegin','<div style="background:#f85149;color:#fff;padding:10px;text-align:center;font-weight:700">⚠️ 行情数据加载失败（网络超时），请刷新重试；手机上可清除浏览器缓存后访问</div>');
+  });
+  throw new Error('yip_data.js 未加载');
+}
 let sortKey='up', sortDir=-1;
 const certOf = c => { const d=DATA.details[c]; return d&&d.certainty&&d.certainty.stars?d.certainty.stars:0; };
-const fisherOf = c => (DATA.fisher && DATA.fisher[c]) || null;
+const fisherOf = c => (typeof FISHER!=='undefined' && FISHER[c]) || null;
 const fishCell = c => { const f=fisherOf(c); if(!f) return '<span style="color:#484f58">—</span>';
   return `<span style="color:#3fb950;font-weight:700">${f.ok}✓</span> <span style="color:#d29922">${f.mid}△</span> `+(f.no?`<span style="color:#f85149;font-weight:700">${f.no}✗</span>`:'<span style="color:#3fb950;font-weight:700">0✗</span>'); };
 const fmtS = s => { if(!s) return '<span style="color:#484f58">—</span>'; const f=Math.floor(s), h=(s-f)>=0.5; return '<span class="star">'+'★'.repeat(f)+(h?'½':'')+'</span>'; };
@@ -92,7 +99,7 @@ const upCls = v => v==null?'':(v>=25?'up':(v<0?'down':'flat'));
 [...new Set(DATA.stocks.map(s=>s.ind).filter(Boolean))].sort().forEach(i=>{
   const o=document.createElement('option'); o.textContent=i; document.getElementById('fInd').appendChild(o);
 });
-document.getElementById('meta').textContent = `共 ${DATA.count} 只 · 数据更新 ${DATA.updated} · 费雪考核 ${DATA.fisher?Object.keys(DATA.fisher).length:0} 张 · 来源：第一财经壹评级 + 费雪十五要点`;
+document.getElementById('meta').textContent = `共 ${DATA.count} 只 · 数据更新 ${DATA.updated} · 费雪考核 ${typeof FISHER!=='undefined'?Object.keys(FISHER).length:0} 张 · 来源：第一财经壹评级 + 费雪十五要点`;
 
 function filtered(){
   const q=document.getElementById('q').value.trim().toLowerCase();
